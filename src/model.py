@@ -7,15 +7,20 @@ class LSTM(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         
-        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, output_dim)
+        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True, dropout = 0.2)
+        self.fc = nn.Linear(hidden_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.d = nn.Dropout(p=0.2)
 
 
     def forward(self, x):
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
         out, (hn, cn) = self.lstm(x, (h0.detach(), c0.detach()))
-        out = self.fc(out[:, -1, :]) 
+
+        out = torch.relu_(self.fc(out[:, -1, :]) )
+        out = torch.sigmoid(self.fc2(out))
+        out = self.d(out)
 
         return out
 
@@ -27,11 +32,13 @@ class GRU(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         
-        self.gru = nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
+        self.gru = nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True, dropout = 0.2)
         self.fc = nn.Linear(hidden_dim, output_dim)
+        self.d = nn.Dropout(p=0.2)
 
     def forward(self, x):
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
+
         out, (hn) = self.gru(x, (h0.detach()))
         out = self.fc(out[:, -1, :]) 
         return out

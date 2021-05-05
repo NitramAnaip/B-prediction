@@ -61,6 +61,22 @@ def get_unblaced_freq(df, labels):
         print(df[df["groups"]==label].shape[0])
 
 
+def scale(volume, i, end, n_steps_in, nbr_dt):
+    """
+    Function that scales the list (volume) given over the time frame specified by nbr_dt
+    """
+    scaler = MinMaxScaler()
+    scaled_vol = np.array(volume[max(i-nbr_dt, 0):end]) # the max part is to have a volume over 10 days
+    #print(volume)
+    scaled_vol = scaled_vol.reshape(-1, 1)
+    
+    scaler.fit(scaled_vol) 
+    scaled_vol = scaler.transform(scaled_vol)
+    
+    scaled_vol = list(scaled_vol.reshape(scaled_vol.shape[0]))
+    scaled_vol = scaled_vol[-n_steps_in:]
+    return scaled_vol
+
 def split_multi_seq(close_evolution, volume, split, btc_evol, evolution_group, n_steps_in, n_steps_out):
     """
     Here seq is of the form [[prices], [volumes], ...]
@@ -74,16 +90,8 @@ def split_multi_seq(close_evolution, volume, split, btc_evol, evolution_group, n
         if out_end > len(volume):
             break
         
-        scaler = MinMaxScaler()
-        scaled_vol = np.array(volume[max(i-240, 0):end]) # the max part is to have a volume over 10 days
-        #print(volume)
-        scaled_vol = scaled_vol.reshape(-1, 1)
-        
-        scaler.fit(scaled_vol) 
-        scaled_vol = scaler.transform(scaled_vol)
-        
-        scaled_vol = list(scaled_vol.reshape(scaled_vol.shape[0]))
-        scaled_vol = scaled_vol[-n_steps_in:]
+        scaled_vol = scale(volume, i, end, n_steps_in, 240)
+        scaled_split = scale(split, i, end, n_steps_in, 240)
 
 
         #print(volume)
@@ -94,8 +102,9 @@ def split_multi_seq(close_evolution, volume, split, btc_evol, evolution_group, n
         for k in range (i, end): 
             inputs = [close_evolution[k]] #evolution
             inputs.append(scaled_vol[k-i])
-            inputs.append(split[k]) #difference between high and low
+            inputs.append(scaled_split[k-i]) #difference between high and low
             inputs.append(btc_evol[k])
+ 
             seq_x.append(inputs)
 
 

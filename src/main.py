@@ -65,11 +65,11 @@ input_dim = 4
 hidden_dim = 32
 num_layers = 6
 output_dim = 3
-num_epochs = 5
+num_epochs = 500
 
 model = LSTM(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, num_layers=num_layers)
 criterion = torch.nn.CrossEntropyLoss(weight = torch.from_numpy(np.array([0.3, 0.4, 0.3])).type(torch.Tensor))
-optimiser = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+optimiser = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-3)
 
 
 hist = np.zeros(num_epochs)
