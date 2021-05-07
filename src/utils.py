@@ -15,8 +15,12 @@ from keras.layers import LSTM, Dense, Dropout
 
 
 def preprocess(df, df_btc):
+    """
+    Preprocessing of the data: gets timestamps into human readable, gets the evolution of the price in percentage of the price from one timeframe to another, 
+    calculates the difference between high and low
+    """
 
-    df_new = pd.DataFrame({"unix": [], "open": [], "high": [], "low": [], "close": [], "Volume USDT": []})
+    #df_new = pd.DataFrame({"unix": [], "open": [], "high": [], "low": [], "close": [], "Volume USDT": []})
 
     #transforming into humanly readable time
     for index in df.index:
@@ -43,6 +47,8 @@ def preprocess(df, df_btc):
     evol_btc.append(0)
     df['evolution'] = evol
 
+
+
     df["split"] = (df["high"] - df["low"])/df["low"]
     df_btc["split"] = (df_btc["high"] - df_btc["low"])/df_btc["low"]
 
@@ -50,10 +56,11 @@ def preprocess(df, df_btc):
     num_classes=len(labels)
     df["groups"] = pd.cut(df["evolution"], bins=[-100,-0.02,0.02, 100], labels = labels)
     df["btc_evol"] = evol_btc
+    df["Volume BTC"] = df_btc["Volume BTC"].head(df.shape[0])
 
 
     #Choice of features
-    df = df.set_index("unix")[["evolution", 'groups', 'Volume USDT', "split", "btc_evol"]].head(32000)
+    df = df.set_index("unix")[["evolution", 'groups', 'Volume LINK', "split", "btc_evol", "Volume BTC"]].head(32000)
     return df, num_classes
 
 def get_unblaced_freq(df, labels):
@@ -77,7 +84,7 @@ def scale(volume, i, end, n_steps_in, nbr_dt):
     scaled_vol = scaled_vol[-n_steps_in:]
     return scaled_vol
 
-def split_multi_seq(close_evolution, volume, split, btc_evol, evolution_group, n_steps_in, n_steps_out, nbr_dt):
+def split_multi_seq(close_evolution, volume, split, btc_evol, btc_vol, evolution_group, n_steps_in, n_steps_out, nbr_dt):
     """
     ARGS:
          - nbr_dt is the number of time frames between the ast info and the moment we want to predict. For instance if nbr_dt=3 
@@ -92,6 +99,7 @@ def split_multi_seq(close_evolution, volume, split, btc_evol, evolution_group, n
         if out_end > len(volume):
             break
         
+        scaled_btc_vol = scale(btc_vol, i, end, n_steps_in, 240)
         scaled_vol = scale(volume, i, end, n_steps_in, 240)
         scaled_split = scale(split, i, end, n_steps_in, 240)
 
@@ -106,6 +114,7 @@ def split_multi_seq(close_evolution, volume, split, btc_evol, evolution_group, n
             inputs.append(scaled_vol[k-i])
             inputs.append(scaled_split[k-i]) #difference between high and low
             inputs.append(btc_evol[k])
+            inputs.append(scaled_btc_vol[k-i])
  
             seq_x.append(inputs)
 

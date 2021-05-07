@@ -31,15 +31,16 @@ nbr_dt = 1
 # Splitting the data into appropriate sequences 
 
 close = np.array(df['groups'])
-vol = list(df['Volume USDT'])
+vol = list(df['Volume LINK'])
 evolution_group = list(close)#np.array(to_categorical(close,num_classes), dtype=np.float32)
 split = list(df['split'])
 close_evolution = list(df["evolution"])
 btc_evol = list(df["btc_evol"])
+btc_vol = list(df["Volume BTC"])
 
 
 
-X, y = split_multi_seq(close_evolution, vol, split, btc_evol, evolution_group, n_per_in, n_per_out, nbr_dt)
+X, y = split_multi_seq(close_evolution, vol, split, btc_evol, btc_vol, evolution_group, n_per_in, n_per_out, nbr_dt)
 
 
 
@@ -63,9 +64,9 @@ y_train = torch.from_numpy(y).type(torch.Tensor)
 X_val = torch.from_numpy(X_val).type(torch.Tensor)
 
 
-input_dim = 4
+input_dim = 5
 hidden_dim = 32
-num_layers = 6
+num_layers = 10
 output_dim = 3
 num_epochs = 100
 
