@@ -48,7 +48,7 @@ def preprocess(df, df_btc):
 
     labels = [ 0, 1, 2]
     num_classes=len(labels)
-    df["groups"] = pd.cut(df["evolution"], bins=[-100,-0.01,0.01, 100], labels = labels)
+    df["groups"] = pd.cut(df["evolution"], bins=[-100,-0.02,0.02, 100], labels = labels)
     df["btc_evol"] = evol_btc
 
 
@@ -77,12 +77,14 @@ def scale(volume, i, end, n_steps_in, nbr_dt):
     scaled_vol = scaled_vol[-n_steps_in:]
     return scaled_vol
 
-def split_multi_seq(close_evolution, volume, split, btc_evol, evolution_group, n_steps_in, n_steps_out):
+def split_multi_seq(close_evolution, volume, split, btc_evol, evolution_group, n_steps_in, n_steps_out, nbr_dt):
     """
-    Here seq is of the form [[prices], [volumes], ...]
+    ARGS:
+         - nbr_dt is the number of time frames between the ast info and the moment we want to predict. For instance if nbr_dt=3 
+        we want to predict the changes 3dt after the time of the last input)
     """
     X, y = [], []
-    for i in range(len(volume)):
+    for i in range(len(volume)-(nbr_dt-1)):
         seq_x, seq_y = [], []
         end = i + n_steps_in
         out_end = end + n_steps_out
@@ -109,7 +111,8 @@ def split_multi_seq(close_evolution, volume, split, btc_evol, evolution_group, n
 
 
         for k in range(end, out_end):
-            seq_y.append(evolution_group[k]) #category
+            
+            seq_y.append(evolution_group[k+nbr_dt-1]) #category
         y.append(seq_y)
         X.append(seq_x)
     #print(X[:3])

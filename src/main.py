@@ -23,6 +23,7 @@ labels = [ 0, 1, 2]
 n_per_in  = 30
 # How many periods ahead to predict
 n_per_out = 1
+nbr_dt = 1
 
 
 
@@ -38,18 +39,19 @@ btc_evol = list(df["btc_evol"])
 
 
 
-X, y = split_multi_seq(close_evolution, vol, split, btc_evol, evolution_group, n_per_in, n_per_out)
+X, y = split_multi_seq(close_evolution, vol, split, btc_evol, evolution_group, n_per_in, n_per_out, nbr_dt)
 
 
 
 
 y = y.reshape(y.shape[0])
+
 #y = tf.convert_to_tensor(y)
 # Reshaping the X variable from 2D to 3D
 #X = tf.convert_to_tensor(X)
 # Reshaping the X variable from 2D to 3D
 
-print(y)
+
 
 
 X_val, X = X[:int(X.shape[0]/10)], X[int(X.shape[0]/10):]
@@ -65,7 +67,7 @@ input_dim = 4
 hidden_dim = 32
 num_layers = 6
 output_dim = 3
-num_epochs = 500
+num_epochs = 100
 
 model = LSTM(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, num_layers=num_layers)
 criterion = torch.nn.CrossEntropyLoss(weight = torch.from_numpy(np.array([0.3, 0.4, 0.3])).type(torch.Tensor))
@@ -89,8 +91,6 @@ for t in range(num_epochs):
 training_time = time.time()-start_time
 print("Training time: {}".format(training_time))
 
-print(x_train)
-print(y_train_pred)
 
 
 
@@ -98,7 +98,11 @@ y_pred = model(X_val).detach().numpy()
 if y_pred is not None:
     b = np.zeros_like(y_pred)
     b[np.arange(len(y_pred)), y_pred.argmax(1)] = 1
-
+    print(b)
+    print(y_val)
+    y_val = to_categorical(y_val)
+    print(y_val)
+    print("***")
     print(metrics.accuracy_score(y_val, b))
     a=metrics.multilabel_confusion_matrix(y_val, b)
     print(a)
