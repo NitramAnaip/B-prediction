@@ -54,7 +54,7 @@ def preprocess(df, df_btc):
 
     labels = [ 0, 1, 2]
     num_classes=len(labels)
-    df["groups"] = pd.cut(df["evolution"], bins=[-100,-0.02,0.02, 100], labels = labels)
+    df["groups"] = pd.cut(df["evolution"], bins=[-100,-0.01,0.01, 100], labels = labels)
     df["btc_evol"] = evol_btc
     df["Volume BTC"] = df_btc["Volume BTC"].head(df.shape[0])
 
@@ -91,12 +91,12 @@ def split_multi_seq(close_evolution, volume, split, btc_evol, btc_vol, evolution
         we want to predict the changes 3dt after the time of the last input)
     """
     X, y = [], []
-    for i in range(len(volume)-(nbr_dt-1)):
+    for i in range(len(volume)):
         seq_x, seq_y = [], []
         end = i + n_steps_in
         out_end = end + n_steps_out
               
-        if out_end > len(volume):
+        if out_end > len(volume)-(nbr_dt-1):
             break
         
         scaled_btc_vol = scale(btc_vol, i, end, n_steps_in, 240)
