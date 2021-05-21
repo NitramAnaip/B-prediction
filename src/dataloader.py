@@ -1,96 +1,94 @@
-# Library Imports
-from datetime import datetime
-from tensorflow.keras.callbacks import Callback
-import numpy as np
-import matplotlib.pyplot as plt
+import os
+import torch
+import random
+import torchvision.transforms as transforms
 import pandas as pd
-import tensorflow as tf
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
-plt.style.use("ggplot")
-from tensorflow import keras
-from keras.models import Sequential
-from keras.layers import LSTM, Dense, Dropout
-from keras.utils import to_categorical
+import numpy as np
+from PIL import Image
+from torch.utils.data import Dataset
+from utils import preprocess_unix, close_data
 
 
-#opening cvs
-df = pd.read_csv("Binance_BTCUSDT_1h.csv")
+class crypto_dataset(Dataset):
+    def __init__(self, crypto_name, dataframe, dataframe_BTC, s, m0, m1, m2, m_out, close,volume_crypto, tradecount=False, volume_USDT=False, open_=False, high=False, low=False):
+        """
+        dataframe is the dataframe as we have it fresh out from the csv: unix in descending order etc
+        s is the number of data points per time scale (we have three time scales: m0, m1, m2)
+        m0 is the number of minutes seperating every data point in first time scale
+        open is bool. If open == True we keep the open data both for btc and crypto
+        """
+        self.df_BTC = preprocess_unix(dataframe_BTC)
+        self.df = preprocess_unix(dataframe)
+        self.s = s
+        self.m0 = m0
+        self.m1=m1
+        self.m2 = m2
+        self.m_out = m_out
+        self.open = open_
+        self.high = high
+        self.low = low
+        self.close = close
+        self.volume_crypto = volume_crypto
+        self.volume_USDT = volume_USDT
+        self.tradecount = tradecount
+
+        #dropping unwanted columns:
+        self.df = self.df.drop(columns=["date", "symbol"])
+        self.df_BTC = self.df_BTC.drop(columns=["date", "symbol"])
 
 
-def preprocess(df):
-
-    df_new = pd.DataFrame({"unix": [], "open": [], "high": [], "low": [], "close": [], "Volume USDT": []})
-
-    #transforming into humanly readable time
-    for index in df.index:
-        if df['unix'][index]>1000000000000:
-            #getting rid of ms
-            df['unix'][index] = df['unix'][index]/1000
-        df['unix'][index] = datetime.utcfromtimestamp(df['unix'][index]).strftime('%Y-%m-%d %H:%M:%S')
-
-    df_base = df.drop_duplicates(subset=['unix'], ignore_index=True)
-    df_base.head()
-
-
-
-    #Creating the % evolution
-    evol = []
-    for i in range(df.shape[0]-1):
-        evol.append((df['close'][i]-df['close'][i+1])/df['close'][i+1])
+        if self.volume_USDT == False:
+            self.df = self.df.drop(columns=["Volume USDT"])
+            self.df_BTC = self.df_BTC.drop(columns=["Volume USDT"])
+        if self.open == False:
+            self.df = self.df.drop(columns=["open"])
+            self.df_BTC = self.df_BTC.drop(columns=["open"])
+        if self.high == False:   
+            self.df = self.df.drop(columns=["high"])
+            self.df_BTC = self.df_BTC.drop(columns=["high"])
+        if self.low == False:   
+            self.df = self.df.drop(columns=["low"])
+            self.df_BTC = self.df_BTC.drop(columns=["low"])
+        if self.tradecount == False:   
+            self.df = self.df.drop(columns=["tradecount"])
+            self.df_BTC = self.df_BTC.drop(columns=["tradecount"])
 
 
-    evol.append(0)
-    df['evolution'] = evol
+        #merging BTC and other crypto df
 
-    df["split"] = (df["high"] - df["low"])/df["low"]
-    df["groups"] = pd.cut(df["evolution"], bins=[-100,-0.01,0.01, 100], labels = [ 0, 1, 2])
+        self.df = self.df.merge(self.df_BTC, how='inner', on='unix')
+        self.df = self.df.drop_duplicates(subset=['unix'], ignore_index=True)
+        print(self.df.head())
 
-
-    #Choice of features
-    df = df.set_index("unix")[["evolution", 'groups', 'Volume USDT', "split"]].head(32000)
-    
-    return df
-
-
-def split_multi_seq(close_evolution, volume, split, evolution_group, n_steps_in, n_steps_out):
-    """
-    Here seq is of the form [[prices], [volumes], ...]
-    """
-    X, y = [], []
-    for i in range(len(volume)):
-        seq_x, seq_y = [], []
-        end = i + n_steps_in
-        out_end = end + n_steps_out
-              
-        if out_end > len(volume):
-            break
+    def __len__(self) :
+        return self.df[self.m_out:-(self.m2*self.s)+1].shape[0]
         
-        scaler = MinMaxScaler()
-        scaled_vol = np.array(volume[max(i-240, 0):end]) # the max part is to have a volume over 10 days
-        #print(volume)
-        scaled_vol = scaled_vol.reshape(-1, 1)
-        
-        scaler.fit(scaled_vol) #I'm scaling the volume only over the past 30 hr or so: It doen't 
-                                    #make sense to scale it over the past 5 years
-        scaled_vol = scaler.transform(scaled_vol)
-        
-        scaled_vol = list(scaled_vol.reshape(scaled_vol.shape[0]))
-        #print(volume)
-        
-        # This is a trick I'm trying: I can't have my training data of the for [ [0,0,1], [volume]]
-        #as it poses a pb when I transform it to a tensor. I'm therefore concatenating it in the form
-        #[ [0,0,1,volume] ]
-        for k in range (i, end): 
-            inputs = [close_evolution[k]] #evolution
-            inputs.append(scaled_vol[k-i])
-            inputs.append(split[k]) #difference between high and low
-            
-            seq_x.append(inputs)
+
+    def __getitem__(self, index: int):
+        """
+        the index will be the index of the data from which we compute the label (ie if the input stops at 10 am on the 5/02 
+        and we want to predict for the next day then the index will be the index of the data of 6/02 at 10 am
+        """
+
+        label = self.df["close_x"][index]/self.df["close_x"][index+self.m_out]
+        if label>0.01:
+            label = np.array([1])
+        else:
+            label = np.array([0])
 
 
-        for k in range(end, out_end):
-            seq_y.append(evolution_group[k]) #category
-        y.append(seq_y)
-        X.append(seq_x)
-    #print(X[:3])
-    return np.array(X), np.array(y)
+        close_BTC_m0 = close_data(self.df, "close_y",index, self.m0, self.m_out, self.s)
+        close_BTC_m1 = close_data(self.df, "close_y",index, self.m1, self.m_out, self.s)
+        close_BTC_m2 = close_data(self.df, "close_y",index, self.m2, self.m_out, self.s)
+        close_BTC = close_BTC_m0 + close_BTC_m1 + close_BTC_m2
+
+        close_m0 = close_data(self.df, "close_x",index, self.m0, self.m_out, self.s)
+        close_m1 = close_data(self.df, "close_x",index, self.m1, self.m_out, self.s)
+        close_m2 = close_data(self.df, "close_x",index, self.m2, self.m_out, self.s)
+        close = close_m0 + close_m1 + close_m2
+
+
+        input_data = np.array([close_BTC, close])
+
+        
+        return input_data, label

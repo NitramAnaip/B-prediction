@@ -52,15 +52,17 @@ def preprocess(df, df_btc):
     df["split"] = (df["high"] - df["low"])/df["low"]
     df_btc["split"] = (df_btc["high"] - df_btc["low"])/df_btc["low"]
 
-    labels = [ 0, 1, 2]
+    labels = [ 0, 1]
     num_classes=len(labels)
-    df["groups"] = pd.cut(df["evolution"], bins=[-100,-0.01,0.01, 100], labels = labels)
+    df["groups"] = pd.cut(df["evolution"], bins=[-100,0.01, 100], labels = labels)
     df["btc_evol"] = evol_btc
     df["Volume BTC"] = df_btc["Volume BTC"].head(df.shape[0])
 
 
     #Choice of features
-    df = df.set_index("unix")[["evolution", 'groups', 'Volume LINK', "split", "btc_evol", "Volume BTC"]].head(32000)
+    df = df['date','close', 'Volume LINK', 'tradecount', 'open', 'high', "Volume BTC"].head(32000)
+    
+    #df = df.set_index("unix")[["evolution", 'groups', 'Volume LINK', "split", "btc_evol", "Volume BTC"]].head(32000)
     return df, num_classes
 
 def get_unblaced_freq(df, labels):
@@ -128,4 +130,50 @@ def split_multi_seq(close_evolution, volume, split, btc_evol, btc_vol, evolution
     return np.array(X), np.array(y)
 
 
+def preprocess_unix(df):
+    for index in df.index:
+        if df['unix'][index]>1000000000000:
+            #getting rid of ms
+            df['unix'][index] = df['unix'][index]/1000
+        df['unix'][index] = datetime.utcfromtimestamp(df['unix'][index]).strftime('%Y-%m-%d %H:%M:%S')
+    return df
 
+def create_new_df(df, dt, crypto_name):
+    """
+    df: fataframe with 1 minute interval in data
+    dt: time interval between every data line in new dataframe (in minutes)
+
+    retuens a dataframe with the new data but with different dt between data
+    NOTE THAT THIS IS TO BE RUN ONCE THE UNIX TIMESTAMPS ARE ORDERED IN ASCENDING ORDER (ie earliest has index 0)
+    """
+
+    df_new = pd.DataFrame({"unix": [], "open": [], "high": [], "low": [], "close": [], "Volume "+crypto_name: [], "Volume USDT": [], "tradecount": []})
+    for i in range (0, df.shape[0]-dt, dt):
+        new = []
+        new.append(df["unix"][i])
+        new.append(df["open"][i])
+        highs = list(df["high"][i:i+dt])
+        new.append(max(highs))
+        lows = list(df["low"][i:i+dt])
+        new.append(min(lows))
+        new.append(df["close"][i+dt])
+        new.append(sum(list(df["Volume USDT"][i:i+dt])))
+        new.append(sum(list(df["Volume "+crypto_name][i:i+dt])))
+        new.append(sum(list(df["tradecount"][i:i+dt])))
+        df_new = df_new.append(pd.Series(new, index=df_new.columns), ignore_index=True)
+
+    return df_new
+
+
+def close_data(df, key, index, m, m_out, s):
+    close_list=[]
+    start = index+m_out
+    end = start+s*m
+
+    for i in range (start, end, m):
+        try:
+            close_list.append(df[key][i])
+        except:
+            import pdb
+            pdb.set_trace()
+    return close_list

@@ -20,7 +20,6 @@ df, num_classes = preprocess(df, df_btc)
 
 
 xgb_bool  = True
-labels = [ 0, 1, 2]
 
 # How many periods looking back to train
 n_per_in  = 30
@@ -50,8 +49,7 @@ print(y.shape)
 # Shuffling the sequences:
 p = np.random.permutation(len(X))
 X, y = X[p], y[p]
-import pdb
-pdb.set_trace()
+
 
 y = y.reshape(y.shape[0])
 
@@ -72,8 +70,8 @@ y_val, y = y[:int(y.shape[0]/10)], y[int(y.shape[0]/10):]
 
 input_dim = 5
 hidden_dim = 32
-num_layers = 6
-output_dim = 3
+num_layers = 3
+output_dim = num_classes
 num_epochs = 100
 
 if xgb_bool:
@@ -86,7 +84,7 @@ if xgb_bool:
     dtest = xgb.DMatrix(data=X_val, label=y_val)
     # Parameter dictionary
     params = {'max_depth':4, 'objective':'multi:softprob',
-              'n_estimators':100, 'booster':'gbtree', 'num_class':3} 
+              'n_estimators':100, 'booster':'gblinear', 'num_class':2} 
 
     # Train the model with train data sets
     xgb_clf = xgb.train(params=params, dtrain=dtrain)
@@ -97,13 +95,14 @@ if xgb_bool:
 else :
 
     x_train = torch.from_numpy(X).type(torch.Tensor)
+
     y_train = torch.from_numpy(y).type(torch.Tensor)
     X_val = torch.from_numpy(X_val).type(torch.Tensor)
-
+    print(y_train)
 
     model = LSTM(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, num_layers=num_layers)
-    criterion = torch.nn.CrossEntropyLoss(weight = torch.from_numpy(np.array([0.3, 0.4, 0.3])).type(torch.Tensor))
-    optimiser = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-3)
+    criterion = torch.nn.BCELoss()#weight = torch.from_numpy(np.array([0.2, 0.8])).type(torch.Tensor))
+    optimiser = torch.optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-3)
 
 
     hist = np.zeros(num_epochs)
@@ -111,10 +110,10 @@ else :
     lstm = []
     for t in range(num_epochs):
         y_train_pred = model(x_train)
-
+        
         #print(y_train_pred.shape())
-        loss = criterion(y_train_pred, y_train.type(torch.LongTensor))
-        print("Epoch ", t, "MSE: ", loss.item())
+        loss = criterion(y_train_pred, torch.from_numpy(to_categorical(y_train)).type(torch.Tensor))    #criterion(y_train_pred, y_train.type(torch.LongTensor))
+        print("Epoch ", t, "training_loss: ", loss.item())
         hist[t] = loss.item()
         optimiser.zero_grad()
         loss.backward()
